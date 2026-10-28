@@ -1,6 +1,6 @@
 .venv/
 outputs/
 *.png/
---pycache--/
+__pycache__/
 .ipynb_checkpoints/
-data/tiled_data/
+data/
