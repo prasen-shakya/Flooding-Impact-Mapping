@@ -134,19 +134,91 @@ def build_cache():
     np.savez_compressed(CACHE, rgb=rgb_arr, label=label_arr, sizes=sizes, split=np.array(split_of))
 
 
-def get_floodnet_tiles(splits=SPLITS):
-    """One 256 x 256 tile per photo. Builds CACHE on the first run."""
+def load_small_photos(splits=SPLITS):
+    """The shrunken photos and labels from CACHE, as two lists. Builds CACHE on the first run."""
     if not CACHE.exists():
         build_cache()
     # Read each array once; indexing the npz file directly would decompress it on every access
     with np.load(CACHE) as data:
         rgb, label, sizes, split_of = data["rgb"], data["label"], data["sizes"], data["split"]
 
-    X, y = [], []
+    rgbs, labels = [], []
     for i in np.flatnonzero(np.isin(split_of, splits)):
         h, w = sizes[i]
-        x_tile, y_tile = pad_to_tile(rgb[i, :h, :w], label[i, :h, :w])
+        rgbs.append(rgb[i, :h, :w])
+        labels.append(label[i, :h, :w])
+    return rgbs, labels
+
+
+def get_floodnet_tiles(splits=SPLITS):
+    """One 256 x 256 tile per photo, in the top-left corner. For testing the Houston model."""
+    X, y = [], []
+    for small_rgb, small_label in zip(*load_small_photos(splits)):
+        x_tile, y_tile = pad_to_tile(small_rgb, small_label)
         X.append(x_tile)
+        y.append(y_tile)
+    return np.stack(X), np.stack(y)
+
+
+def random_flip_rotate(rgb, label, rng):
+    """Random 90-degree rotation and horizontal flip, applied the same way to photo and label."""
+    k = rng.integers(4)
+    rgb, label = np.rot90(rgb, k), np.rot90(label, k)
+    if rng.random() < 0.5:
+        rgb, label = rgb[:, ::-1], label[:, ::-1]
+    return rgb, label
+
+
+def get_floodnet_mosaics(splits=("train",), seed=None, flip_rotate=True):
+    """Packs many shrunken photos into each 256 x 256 tile, for training at the Houston scale.
+
+    Same output format as get_floodnet_tiles, but ~85% of each tile is real photo instead of ~2%.
+    Photos go in random order, left to right in rows (like words on a page):
+    - A row is as tall as its tallest photo; shorter photos are mirror-padded down to fill it,
+      with -1 labels, so there are no empty holes.
+    - Photos that hang over the right or bottom edge are cut off there.
+    Each seed gives a different arrangement, so call it with a new seed every epoch
+    (e.g. seed=epoch) to show the model new combinations.
+    """
+    rng = np.random.default_rng(seed)
+    photos = list(zip(*load_small_photos(splits)))
+    order = rng.permutation(len(photos))
+
+    X, y = [], []
+    i = 0
+    while i < len(order):
+        x_tile = np.zeros((TILE, TILE, 3), np.uint8)
+        y_tile = np.full((TILE, TILE), -1, np.int8)
+        top = 0
+        while top < TILE and i < len(order):
+            # Pick the photos for this row until it reaches the right edge
+            row = []
+            width = 0
+            while width < TILE and i < len(order):
+                rgb, label = photos[order[i]]
+                if flip_rotate:
+                    rgb, label = random_flip_rotate(rgb, label, rng)
+                row.append((rgb, label))
+                width += label.shape[1]
+                i += 1
+
+            row_h = max(label.shape[0] for _, label in row)
+            left = 0
+            for rgb, label in row:
+                h, w = label.shape
+                pad = ((0, row_h - h), (0, 0))
+                rgb = np.pad(rgb, pad + ((0, 0),), mode="symmetric")
+                label = np.pad(label, pad, constant_values=-1)
+                fit_h, fit_w = min(row_h, TILE - top), min(w, TILE - left)
+                x_tile[top:top + fit_h, left:left + fit_w] = rgb[:fit_h, :fit_w]
+                y_tile[top:top + fit_h, left:left + fit_w] = label[:fit_h, :fit_w]
+                left += w
+            top += row_h
+
+        if top < TILE:
+            # The last tile ran out of photos; mirror what's there into the empty bottom
+            x_tile = np.pad(x_tile[:top], ((0, TILE - top), (0, 0), (0, 0)), mode="symmetric")
+        X.append((x_tile / 255).astype(np.float32))
         y.append(y_tile)
     return np.stack(X), np.stack(y)
 
