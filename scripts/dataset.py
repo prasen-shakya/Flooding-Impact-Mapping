@@ -1,6 +1,6 @@
 """Cuts each image into 256x256 tiles in memory. Nothing is saved to disk.
 
-- X: (N, 256, 256, 4) float32. Channels are R, G, B (0-1) and the DEM minus the image mean.
+- X: (N, 256, 256, 4) float32. Channels are R, G, B (0-1) and the DEM, centred and scaled per image.
 - y: (N, 256, 256) int8. 0 = dry, 1 = flood, -1 = unknown.
 
 The split is by whole image, so no tile from a test image ends up in training.
@@ -14,10 +14,17 @@ import rasterio
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 TILE = 256
 
+# True: DEM = (DEM - image mean) / image std, so a small dip on flat ground counts as much as a big one on hilly ground.
+# The held-out Ida image is nearly flat (std 0.4 m; Houston images are 1-4 m) and the metre-scaled model saw no low ground there.
+# False: DEM = DEM - image mean, in metres. Weights trained before 2026-11-10 (0.834, 0.825) need False.
+DEM_STANDARDIZE = True
+
 SPLITS = {
-    "train": [1, 2, 3, 8, 9],
+    "train": [1, 2, 3, 8, 9, 13, 14, 15, 16, 17, 19],  # areas we labeled: 13, 14, 19 = Florence; 15-17 = Harvey (west Houston)
     "val": [12],
     "test": [4, 5, 6, 7, 10, 11],
+    # Held-out hard case from Hurricane Ida (flat coastal Louisiana). Never train, validate or pick a cutoff on it.
+    "ida_hard_case": [18],
 }
 
 
@@ -37,9 +44,12 @@ def load_image(i):
 
 
 def make_input(rgb, dem):
-    """Scales RGB to 0-1, subtracts the mean elevation, stacks into (H, W, 4)."""
+    """Scales RGB to 0-1, centres (and by default scales) the elevation, stacks into (H, W, 4)."""
     rgb = rgb / 255
     dem = dem - dem.mean()
+    if DEM_STANDARDIZE:
+        # clipped: a levee or pit can sit 10 std from the mean, and inputs that large made the training loss go NaN
+        dem = np.clip(dem / dem.std(), -5, 5)
     return np.dstack([rgb, dem]).astype(np.float32)
 
 
