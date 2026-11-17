@@ -17,6 +17,7 @@ TILE = 256
 # True: DEM = (DEM - image mean) / image std, so a small dip on flat ground counts as much as a big one on hilly ground.
 # The held-out Ida image is nearly flat (std 0.4 m; Houston images are 1-4 m) and the metre-scaled model saw no low ground there.
 # False: DEM = DEM - image mean, in metres. Weights trained before 2026-11-10 (0.834, 0.825) need False.
+# "both": two elevation channels, metres then scaled (X gets 5 channels). Set by notebooks/unet_dem_2dem.ipynb.
 DEM_STANDARDIZE = True
 
 SPLITS = {
@@ -47,6 +48,8 @@ def make_input(rgb, dem):
     """Scales RGB to 0-1, centres (and by default scales) the elevation, stacks into (H, W, 4)."""
     rgb = rgb / 255
     dem = dem - dem.mean()
+    if DEM_STANDARDIZE == "both":
+        return np.dstack([rgb, dem, np.clip(dem / dem.std(), -5, 5)]).astype(np.float32)
     if DEM_STANDARDIZE:
         # clipped: a levee or pit can sit 10 std from the mean, and inputs that large made the training loss go NaN
         dem = np.clip(dem / dem.std(), -5, 5)
