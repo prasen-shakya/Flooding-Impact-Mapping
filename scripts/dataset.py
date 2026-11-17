@@ -21,11 +21,13 @@ TILE = 256
 DEM_STANDARDIZE = True
 
 SPLITS = {
-    "train": [1, 2, 3, 8, 9, 13, 14, 15, 16, 17, 19],  # areas we labeled: 13, 14, 19 = Florence; 15-17 = Harvey (west Houston)
-    "val": [12],
+    "train": [1, 2, 3, 8, 9, 13, 14, 15, 16, 17, 19, 21, 22],  # areas we labeled: 13, 14, 19, 21, 22 = Florence; 15-17 = Harvey (west Houston)
+    "val": [12, 20],  # 20 = Florence (Kinston, area11)
     "test": [4, 5, 6, 7, 10, 11],
     # Held-out hard case from Hurricane Ida (flat coastal Louisiana). Never train, validate or pick a cutoff on it.
     "ida_hard_case": [18],
+    # New storm, never trained on: 2019 Arkansas River flood (Morrilton). Only look at its score when reporting the final model.
+    "new_storm_test": [23],
 }
 
 
