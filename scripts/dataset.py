@@ -26,8 +26,8 @@ SPLITS = {
     "test": [4, 5, 6, 7, 10, 11],
     # Held-out hard case from Hurricane Ida (flat coastal Louisiana). Never train, validate or pick a cutoff on it.
     "ida_hard_case": [18],
-    # New storm, never trained on: 2019 Arkansas River flood (Morrilton). Only look at its score when reporting the final model.
-    "new_storm_test": [23],
+    # New storm, never trained on: 2019 Arkansas flood. 23 = Morrilton (Arkansas River), 24 = Des Arc (White River), 25 = north of Pine Bluff (Arkansas River). Only look at its score when reporting the final model.
+    "new_storm_test": [23, 24, 25],
 }
 
 
