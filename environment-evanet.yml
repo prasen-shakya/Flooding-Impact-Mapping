@@ -1,0 +1,29 @@
+# Environment for the EvaNet (PyTorch) experiments: notebooks/evanet.ipynb and scripts/evanet/.
+# The rest of the project uses TensorFlow and its own environment.
+#
+# Create (Linux / WSL):
+#   conda env create -f environment-evanet.yml
+#   conda activate evanet
+#   python -m ipykernel install --user --name evanet --display-name "EvaNet (PyTorch)" --env LD_LIBRARY_PATH ""
+#
+# The --env part matters when JupyterLab runs from the TensorFlow env: that env sets LD_LIBRARY_PATH to
+# its own CUDA/cuDNN, every kernel inherits it, and PyTorch then fails on the first GPU convolution with
+# "CUDNN_STATUS_SUBLIBRARY_LOADING_FAILED". Clearing it in the kernelspec keeps PyTorch on its own libraries.
+#
+# The PyPI torch wheels for Linux include CUDA, so the GPU works with a recent NVIDIA driver.
+name: evanet
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - torch==2.14.1
+      - torchvision==0.29.2
+      - numpy==2.2.6
+      - matplotlib==3.10.9
+      - scikit-learn==1.7.2
+      - tqdm==4.70.1
+      - opencv-python-headless==5.1.0.95
+      - rasterio==1.4.4
+      - ipykernel==7.3.0
