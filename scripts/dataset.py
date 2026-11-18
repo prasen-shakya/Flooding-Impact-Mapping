@@ -21,7 +21,9 @@ TILE = 256
 DEM_STANDARDIZE = True
 
 SPLITS = {
-    "train": [1, 2, 3, 8, 9, 13, 14, 15, 16, 17, 19, 21, 22],  # areas we labeled: 13, 14, 19, 21, 22 = Florence; 15-17 = Harvey (west Houston)
+    # areas we labeled: 13, 14, 19, 21, 22 = Florence; 15-17 = Harvey (west Houston)
+    # 26-28 = EvaNet's Hurricane Matthew 2016 regions (NC): 26 = Grimesland, 27 = location unknown, 28 = Greenville-Central
+    "train": [1, 2, 3, 8, 9, 13, 14, 15, 16, 17, 19, 21, 22, 26, 27, 28],
     "val": [12, 20],  # 20 = Florence (Kinston, area11)
     "test": [4, 5, 6, 7, 10, 11],
     # Held-out hard case from Hurricane Ida (flat coastal Louisiana). Never train, validate or pick a cutoff on it.
