@@ -61,14 +61,51 @@ def image_quadkeys(i):
     return keys
 
 
-def download(url, path):
-    with requests.get(url, stream=True, timeout=60) as r:
-        r.raise_for_status()
-        tmp = path.with_suffix(".part")
-        with open(tmp, "wb") as f:
-            for chunk in r.iter_content(chunk_size=1 << 20):
-                f.write(chunk)
-        tmp.rename(path)  
+def download(url, path, tries=10):
+    """Downloads into a .part file, then renames it. The server sometimes stalls mid-file, so on a
+    timeout it retries and picks up where it stopped (HTTP Range) instead of starting over."""
+    tmp = path.with_suffix(".part")
+    for attempt in range(1, tries + 1):
+        have = tmp.stat().st_size if tmp.exists() else 0
+        headers = {"Range": f"bytes={have}-"} if have else {}
+        try:
+            with requests.get(url, stream=True, timeout=(10, 60), headers=headers) as r:
+                if r.status_code == 416:  # nothing left to fetch: the .part file is already complete
+                    break
+                r.raise_for_status()
+                mode = "ab" if r.status_code == 206 else "wb"  # 200 = server ignored Range, start over
+                with open(tmp, mode) as f:
+                    for chunk in r.iter_content(chunk_size=1 << 20):
+                        f.write(chunk)
+            break
+        except requests.exceptions.RequestException as e:
+            if attempt == tries:
+                raise
+            print(f"   stalled at {tmp.stat().st_size / 1e6 if tmp.exists() else 0:.1f} MB ({type(e).__name__}), "
+                  f"retrying {attempt}/{tries - 1}")
+    tmp.rename(path)
+
+
+def ensure_files(quadkeys, dry_run=False):
+    """Downloads the building files for these quadkeys that aren't in data/buildings/ yet."""
+    # Read as text so leading zeros in the quadkey survive
+    links = pd.read_csv(LINKS_CSV, dtype={"QuadKey": str})
+    rows = links[links.QuadKey.isin(quadkeys)]
+
+    missing = set(quadkeys) - set(rows.QuadKey)
+    if missing:
+        print("No download link for:", sorted(missing))
+
+    for r in rows.itertuples():
+        # Location is in the name because a quadkey can be listed under more than one region
+        path = BUILDINGS_DIR / f"{r.Location}_{r.QuadKey}.csv.gz"
+        if path.exists():
+            continue
+        if dry_run:
+            print("would download", path.name, r.Size)
+        else:
+            print("downloading", path.name, r.Size)
+            download(r.Url, path)
 
 
 def main():
@@ -81,25 +118,7 @@ def main():
         keys = image_quadkeys(i)
         print(f"image_{i}: {sorted(keys)}")
         needed |= keys
-
-    # Read as text so leading zeros in the quadkey survive
-    links = pd.read_csv(LINKS_CSV, dtype={"QuadKey": str})
-    rows = links[links.QuadKey.isin(needed)]
-
-    missing = needed - set(rows.QuadKey)
-    if missing:
-        print("No download link for:", sorted(missing))
-
-    for r in rows.itertuples():
-        # Location is in the name because a quadkey can be listed under more than one region
-        path = BUILDINGS_DIR / f"{r.Location}_{r.QuadKey}.csv.gz"
-        if path.exists():
-            print("have", path.name)
-        elif args.dry_run:
-            print("would download", path.name, r.Size)
-        else:
-            print("downloading", path.name, r.Size)
-            download(r.Url, path)
+    ensure_files(needed, args.dry_run)
 
 
 if __name__ == "__main__":
